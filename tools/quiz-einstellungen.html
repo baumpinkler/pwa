@@ -487,9 +487,13 @@ $("modForm").addEventListener("input", e => {
 
 /* ---------- Fenster ---------- */
 const dlg = $("dlg");
+/* Jedes Fenster bekommt einen frischen Inhalt: Zuhörer am alten Inhalt würden sonst weiter mitschreiben
+   (eine Änderung landete in allen zuvor geöffneten Stufen bzw. Fragearten). */
 function openDlg(html, wire){
-  $("dlgBody").innerHTML = html;
-  wire($("dlgBody"));
+  const body = document.createElement("div");
+  body.className = "dlg"; body.id = "dlgBody"; body.innerHTML = html;
+  $("dlgBody").replaceWith(body);
+  wire(body);
   if (!dlg.open) dlg.showModal();
 }
 dlg.addEventListener("click", e => { if (e.target === dlg || e.target.closest(".close")) dlg.close(); });
