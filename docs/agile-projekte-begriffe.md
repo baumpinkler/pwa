@@ -1,8 +1,8 @@
-# Begriffsliste Modul „Agile & Projekte“ (Entwurf)
+# Begriffsliste Modul „Agile & Projekte“
 
-Stand: Planung, noch keine Inhalte. Herkunft **B** = Bestand aus dem IT-Modul (Kategorie `scrum`, `pm` oder `git`, Deutsch unverändert übernommen), **N** = neu (Deutsch ist ein Vorschlag).
+Stand: abgestimmt und umgesetzt. Die Liste entspricht dem Modul `modules/agile/module.json` (507 Begriffe, Kategorie, Englisch und Deutsch gleich). Herkunft **B** = Bestand aus dem IT-Modul (Kategorie `scrum`, `pm` oder `git`, Deutsch unverändert übernommen), **N** = neu.
 
-Streichen oder tauschen: Zeile löschen bzw. ändern. Jede Kategorie soll 30–50 Begriffe behalten, das Modul mindestens 500.
+Änderungen nur nach Absprache: neue Begriffe zuerst hier eintragen und abstimmen, dann ins Modul übernehmen (siehe „Inhalte schreiben“ in `CLAUDE.md`). Gestrichene oder verschobene Begriffe hier ebenfalls nachziehen. Jede Kategorie hat 30–50 Begriffe.
 
 Nicht übernommen aus `scrum`: `team velocity` (doppelt zu `velocity`), `to do`, `in progress`, `done` (nur Board-Spalten).
 
