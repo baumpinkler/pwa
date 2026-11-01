@@ -275,7 +275,10 @@ function extraOf(t){
     ex:   arr(x.ex).filter(e => Array.isArray(e) && typeof e[0] === "string" && typeof e[1] === "string" && termRe(t).test(e[0])),
     sit:  arr(x.sit).filter(v => typeof v === "string" && v.trim()),
     conf: arr(x.conf).filter(c => Array.isArray(c) && BYID[c[0]] && c[0] !== t.id && typeof c[1] === "string" && c[1].trim()),
-    tf:   arr(x.tf).filter(f => Array.isArray(f) && typeof f[0] === "boolean" && typeof f[1] === "string" && f[1].trim())
+    tf:   arr(x.tf).filter(f => Array.isArray(f) && typeof f[0] === "boolean" && typeof f[1] === "string" && f[1].trim()),
+    /* Abkürzung [kurz, lang] (seit v47) oder null */
+    abbr: Array.isArray(x.abbr) && typeof x.abbr[0] === "string" && typeof x.abbr[1] === "string" && x.abbr[0].trim() && x.abbr[1].trim()
+      && x.abbr[0].trim().toLowerCase() !== x.abbr[1].trim().toLowerCase() ? [x.abbr[0].trim(), x.abbr[1].trim()] : null
   };
 }
 /* Schreibweisen eines Begriffs (englisch und deutsche Hauptwörter ohne Artikel) zum Ausblenden */
@@ -1145,6 +1148,112 @@ kind({id:"pronounce", name:"Nachsprechen", ins:["say"], sayOnly:true,
   ask:() => "Sprich den Begriff nach.",
   body:q => `<div class="q-big" lang="${esc(MOD.lang.term)}">${esc(q.t.en)}</div><div class="q-hint">${esc(q.t.de)} ${speakBtn(q.t.en, "vorhören")}</div>`});
 
+/* ---------- Fragearten mit eigenen Inhalten (Quiz-Baukasten, Chat 6): Abkürzung, Gegenteil und Verwandte ---------- */
+/* Abkürzung: extra[id].abbr = [kurz, lang]. Richtungen als eigene Ausgabearten (Einstellung „directions“): Abkürzung → Langform,
+   Langform → Abkürzung. Beim Auswählen sind die falschen Antworten zum Teil abgewandelte Formen der richtigen (ein Wort bzw.
+   Buchstabe getauscht), sonst ließe sich die Langform an den Anfangsbuchstaben erraten; dazu Abkürzungen anderer Begriffe.
+   Beim Schreiben zählen Satzzeichen, Leerzeichen und Groß/Klein nicht (q.want). */
+const AB_DIRS = ["short-long", "long-short"];
+const abNorm = s => typeNorm(s).replace(/[^\p{L}\p{N}]+/gu, "");
+let ABW = null, ABW_MOD = null;
+const AB_STOP = new Set(["and", "the", "for", "with", "from", "into", "over", "you", "your", "its", "not"]);
+const abWordOk = w => /^\p{L}{3,}$/u.test(w) && !AB_STOP.has(w.toLowerCase());
+/* Wörter aller Langformen des Moduls nach Anfangsbuchstabe (für abgewandelte Langformen) */
+function abWords(){
+  if (ABW_MOD === MOD && ABW) return ABW;
+  const by = {};
+  for (const t of TERMS) { const a = extraOf(t).abbr; if (!a) continue;
+    for (const w of a[1].split(/[\s\/,;]+/)) if (abWordOk(w)) { const k = w[0].toLowerCase(); (by[k] = by[k] || new Set()).add(w); } }
+  ABW = by; ABW_MOD = MOD; return by;
+}
+/* Abgewandelte Langform: ein Wort durch ein Wort aus anderen Langformen mit gleichem Anfangsbuchstaben und ähnlicher Länge ersetzt */
+function abFakeLong(long){
+  const words = long.split(" "), out = [], by = abWords();
+  words.forEach((w, i) => {
+    const m = /^(\p{L}+)([,;.:]?)$/u.exec(w); if (!m || !abWordOk(m[1])) return;
+    const core = m[1];
+    for (const r of by[core[0].toLowerCase()] || []) {
+      if (r.toLowerCase() === core.toLowerCase() || Math.abs(r.length - core.length) > Math.max(2, core.length * .4)) continue;
+      const rr = /^\p{Lu}/u.test(core) ? r[0].toUpperCase() + r.slice(1) : r[0].toLowerCase() + r.slice(1);
+      out.push(words.map((x, j) => j === i ? rr + m[2] : x).join(" "));
+    }
+  });
+  return shuffle(out);
+}
+function abFakeShort(short){
+  const ch = [...short], pos = ch.map((c, i) => /[A-Z]/.test(c) ? i : -1).filter(i => i >= 0), out = [];
+  for (let k = 0; k + 1 < pos.length; k++) { const a = ch.slice(); [a[pos[k]], a[pos[k + 1]]] = [a[pos[k + 1]], a[pos[k]]]; out.push(a.join("")); }
+  const letters = [...new Set(TERMS.map(t => extraOf(t).abbr).filter(Boolean).flatMap(a => [...a[0]].filter(c => /[A-Z]/.test(c))))];
+  for (const p of pos) for (const l of shuffle(letters).slice(0, 3)) if (l !== ch[p]) { const a = ch.slice(); a[p] = l; out.push(a.join("")); }
+  return shuffle(out);
+}
+kind({id:"abbreviation", name:"Abkürzung", outs:AB_DIRS, outKey:"directions", ins:["pick", "type"], big:"q-big",
+  outLabel:o => o === "long-short" ? "Langform → Abkürzung" : "Abkürzung → Langform",
+  help:() => "Nur bei Begriffen mit Abkürzung: Wofür steht die Abkürzung, und wie kürzt man die Langform ab? Unter den falschen Antworten sind auch leicht abgewandelte Formen, die Anfangsbuchstaben allein helfen also nicht.",
+  refs:t => extraOf(t).abbr ? [{}] : [],
+  outCk:o => "ab:" + o, inpCk:i => "abi:" + i,
+  make:q => {
+    const [short, long] = extraOf(q.t).abbr, toShort = q.out === "long-short";
+    q.ab = [short, long]; q.prompt = toShort ? long : short; q.want = toShort ? short : long;
+    q.inpText = toShort ? "Schreib die Abkürzung" : "Schreib die Langform"; q.inpPlace = toShort ? "Abkürzung" : "Langform";
+    if (q.inp !== "pick") return;
+    const seen = new Set([abNorm(q.want)]), wrong = [];
+    const add = s => { const k = abNorm(s); if (wrong.length < q.n - 1 && k && !seen.has(k)) { seen.add(k); wrong.push(s); } };
+    const fakes = toShort ? abFakeShort(short) : abFakeLong(long);
+    fakes.slice(0, Math.ceil((q.n - 1) / 2)).forEach(add);
+    const others = distractors(q.t, "en", q.n + 6, c => !!extraOf(c).abbr).map(c => extraOf(c).abbr[toShort ? 0 : 1]);
+    /* andere Abkürzungen: zuerst gleicher Anfangsbuchstabe, sonst wenigstens gleiche Schreibweise (groß/klein), damit sie nichts verraten */
+    const first = q.want[0].toLowerCase(), up = s => /^\p{Lu}/u.test(s), same = others.filter(s => up(s) === up(q.want));
+    same.filter(s => s[0].toLowerCase() === first).concat(same, others).forEach(add);
+    fakes.forEach(add);
+    q.answer = "ok"; q.opts = shuffle([{id:"ok", label:q.want}].concat(wrong.map((l, i) => ({id:"x" + i, label:l}))));
+    q.long = !toShort;
+  },
+  ask:q => q.out === "long-short" ? "Wie lautet die Abkürzung?" : "Wofür steht die Abkürzung?",
+  body:q => `<div class="${q.out === "long-short" ? "q-mid" : "q-big"}" lang="${esc(MOD.lang.term)}">${esc(q.prompt)}</div>`,
+  fb:q => `<p><b>${esc(q.ab[0])}</b> steht für <b>${esc(q.ab[1])}</b>.</p>`});
+/* Gegenteil und Verwandte: extra[id].rel = {opp:[ids], syn:[ids], rel:[ids]}. Beziehungen gelten in beide Richtungen
+   (relOf, einmal pro Modul berechnet); steht ein Paar in mehreren Listen, zählt opp vor syn vor rel. Ein Häkchen je Art.
+   Falsche Antworten: nie ein Begriff, der mit dem gefragten in irgendeiner Beziehung steht (auch conf); bei „gehört dazu“
+   nur aus anderen Themen, weil im selben Thema vieles irgendwie zusammengehört. */
+const REL_KINDS = {opp:{tag:"Gegenteil", ask:"Was ist das Gegenteil oder Gegenstück von", fb:"Gegenteil bzw. Gegenstück"},
+  syn:{tag:"Fast dasselbe", ask:"Was bedeutet fast dasselbe wie", fb:"Bedeutet fast dasselbe"},
+  rel:{tag:"Gehört dazu", ask:"Was hängt eng zusammen mit", fb:"Hängt eng zusammen"}};
+let RELS = null, RELS_MOD = null;
+function relIndex(){
+  if (RELS_MOD === MOD && RELS) return RELS;
+  const map = Object.create(null), get = id => map[id] || (map[id] = {opp:new Set(), syn:new Set(), rel:new Set()});
+  for (const [id, x] of Object.entries(MOD.extra || {})) {
+    if (!BYID[id] || !x || typeof x.rel !== "object" || Array.isArray(x.rel) || !x.rel) continue;
+    for (const k of Object.keys(REL_KINDS)) for (const o of arr(x.rel[k])) {
+      if (typeof o !== "string" || !BYID[o] || o === id) continue;
+      get(id)[k].add(o); get(o)[k].add(id);
+    }
+  }
+  for (const r of Object.values(map)) { for (const o of r.opp) { r.syn.delete(o); r.rel.delete(o); } for (const o of r.syn) r.rel.delete(o); }
+  RELS = map; RELS_MOD = MOD; return map;
+}
+function relOf(t){
+  const r = relIndex()[t.id];
+  return {opp:r ? [...r.opp] : [], syn:r ? [...r.syn] : [], rel:r ? [...r.rel] : []};
+}
+kind({id:"related", name:"Gegenteil und Verwandte", refName:"Beziehung", big:"q-big", each:"jede Art einmal (Gegenteil, fast dasselbe, hängt eng zusammen)",
+  help:() => "Nur bei Begriffen, zu denen es das gibt: Du wählst das Gegenteil (oder Gegenstück), einen Begriff, der fast dasselbe bedeutet, oder einen, der eng damit zusammenhängt.",
+  refs:t => { const r = relOf(t); return Object.keys(REL_KINDS).filter(k => r[k].length).map(k => ({ck:"rl:" + k, k, ids:r[k], tag:REL_KINDS[k].tag})); },
+  make:q => {
+    const r = q.task.ref, a = BYID[pickOne(r.ids)], all = relOf(q.t);
+    const no = new Set([q.t.id].concat(all.opp, all.syn, all.rel, extraOf(q.t).conf.map(c => c[0])));
+    for (const [id, x] of Object.entries(MOD.extra || {})) if (arr(x && x.conf).some(c => Array.isArray(c) && c[0] === q.t.id)) no.add(id);
+    const lt = q.t.en.toLowerCase().replace(/^to /, "");
+    const fit = c => !no.has(c.id) && !c.en.toLowerCase().includes(lt) && !lt.includes(c.en.toLowerCase().replace(/^to /, ""))
+      && (r.k !== "rel" || (c.cat !== q.t.cat && c.cat !== a.cat));
+    q.rel = a; q.prompt = q.t.en; q.answer = a.id;
+    q.opts = shuffle([a].concat(distractors(a, "en", q.n - 1, fit))).map(o => ({id:o.id, label:o.en}));
+  },
+  ask:q => esc(REL_KINDS[q.task.ref.k].ask) + "?",
+  fb:q => { const r = q.task.ref, more = r.ids.filter(id => id !== q.rel.id).map(id => BYID[id]);
+    return `<p><b>${esc(REL_KINDS[r.k].fb)}:</b> ${esc(q.rel.en)} = ${esc(q.rel.de)}</p>${more.length ? `<p>Ebenso: ${more.map(o => esc(o.en)).join(", ")}</p>` : ""}`; }});
+
 /* ---------- Moduleinstellung „quiz“ (module.json) ----------
    Wird beim Laden gelesen, geprüft und auf erlaubte Bereiche zurechtgestutzt (quizConf). Unbekannte Fragearten fallen weg,
    Stufen ohne bekannte Fragearten werden übersprungen, höchstens STAGE_MAX Stufen. Ohne gültige Stufen gilt DEFAULT_STAGES.
@@ -1926,7 +2035,13 @@ function lev(a, b){
 }
 /* Toleranz: Groß/Klein (außer quiz.typing.caseSensitive), „to “, Bindestrich/Leerzeichen egal;
    ≤ 1 Tippfehler je angefangene quiz.typing.typosPer Buchstaben (Standard 6) */
-function checkTyped(t, text){
+function checkTyped(t, text, wantText){
+  if (wantText) {   /* eigene erwartete Antwort der Frage (q.want, z. B. Langform einer Abkürzung): Satzzeichen zählen nicht */
+    const got = abNorm(text), want = abNorm(wantText);
+    if (!got) return null;
+    if (got === want) return {ok:true};
+    return lev(got, want) <= Math.ceil(want.length / QZ.typing.typosPer) ? {ok:true, near:true} : {ok:false};
+  }
   const got = typeNorm(text), want = typeNorm(t.en);
   if (!got) return null;
   if (got === want) return {ok:true};
@@ -2133,10 +2248,10 @@ function renderQuiz(){
   if (q.inp === "type" || q.inp === "say") input = a
     ? `<div class="typed${a.ok ? " ok" : " bad"}">${a.typed === null
         ? `<span class="ty-v none">${a.timeout ? "Zeit abgelaufen" : "Weiß ich nicht"}</span>`
-        : `<span class="ty-l">Deine Antwort${a.spoken ? " (gesprochen)" : ""}</span><span class="ty-v mine">${esc(a.typed)}</span>`}${a.ok && !a.near ? "" : `<span class="ty-l">Richtig</span><span class="ty-v right">${esc(t.en)}</span>`}</div>`
-    : `<p class="inp-mode"><span aria-hidden="true">${say ? "🎤" : "✍️"}</span> ${say ? `Sprich den Begriff auf ${esc(TN)}` : `Schreib den Begriff auf ${esc(TN)}`}</p>
+        : `<span class="ty-l">Deine Antwort${a.spoken ? " (gesprochen)" : ""}</span><span class="ty-v mine">${esc(a.typed)}</span>`}${a.ok && !a.near ? "" : `<span class="ty-l">Richtig</span><span class="ty-v right">${esc(q.want || t.en)}</span>`}</div>`
+    : `<p class="inp-mode"><span aria-hidden="true">${say ? "🎤" : "✍️"}</span> ${q.inpText ? esc(q.inpText) : say ? `Sprich den Begriff auf ${esc(TN)}` : `Schreib den Begriff auf ${esc(TN)}`}</p>
        <div class="type-row${say ? " say" : ""}">${say ? `<button class="btn mic big" id="mic" aria-label="Begriff auf ${esc(TN)} sprechen" aria-pressed="false">🎤</button>` : ""}<input class="type-in" id="typed" type="text" lang="${esc(MOD.lang.term)}" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" enterkeyhint="done"
-         ${say ? "readonly" : ""} placeholder="${say ? "🎤 antippen und sprechen" : "Begriff auf " + esc(TN)}" aria-label="Begriff auf ${esc(TN)}"></div>
+         ${say ? "readonly" : ""} placeholder="${say ? "🎤 antippen und sprechen" : q.inpPlace ? esc(q.inpPlace) : "Begriff auf " + esc(TN)}" aria-label="${q.inpText ? esc(q.inpText) : "Begriff auf " + esc(TN)}"></div>
        ${say ? `<p class="say-note">Was erkannt wurde, steht danach im Feld. Du kannst neu aufnehmen${def.sayOnly ? "." : "; änderst du den Text von Hand, zählt es als Schreiben."}</p>` : ""}
        <div class="type-btns"><button class="btn" id="dunno">Weiß ich nicht</button><button class="btn primary" id="check">Prüfen</button></div>`;
   const s = stateOf(t), last = a && Q.total <= Q.asked;
@@ -2299,7 +2414,7 @@ function answer(k){ const q = Q.q; stopSpeak(); if (q.def.pick && q.def.pick(q, 
 /* Gesprochen: die beste erkannte Variante kommt ins Textfeld (richtig vor fast richtig vor Verwechslung vor falsch) */
 function heard(alts, inp){
   if (!Q || Q.answered || !alts.length) return;
-  const t = Q.q.t, rs = alts.map(x => ({x, r:checkTyped(t, x)})).filter(o => o.r);
+  const t = Q.q.t, rs = alts.map(x => ({x, r:checkTyped(t, x, Q.q.want)})).filter(o => o.r);
   if (!rs.length) return;
   const best = rs.find(o => o.r.ok && !o.r.near) || rs.find(o => o.r.ok) || rs.find(o => o.r.other) || rs[0];
   Q.spoken = {text:best.x, r:best.r};
@@ -2309,7 +2424,7 @@ function heard(alts, inp){
 /* Abschicken: unverändert gesprochen = Sprechen, sonst Schreiben */
 function answerInput(text){
   const sp = Q.spoken && Q.spoken.text === text ? Q.spoken : null;
-  const r = sp ? sp.r : checkTyped(Q.q.t, text);
+  const r = sp ? sp.r : checkTyped(Q.q.t, text, Q.q.want);
   if (!r) return;
   settle(r.ok, {typed:text.trim(), near:!!r.near, spoken:!!sp, inp:sp ? "say" : "type", edited:!sp && !!Q.spoken});
 }
@@ -2338,7 +2453,7 @@ function settle(ok, info){
   if (!Q || Q.answered) return;
   stopSpeak();
   const q = Q.q, t = q.t;
-  let note = info.note ? info.note : info.timeout ? "Die Zeit für diese Frage ist um. Das zählt wie eine falsche Antwort, der Begriff kommt später wieder." : info.near ? (info.spoken ? `Fast richtig: verstanden habe ich „${info.typed}“, gemeint ist „${t.en}“.` : `Fast richtig: „${info.typed}“, richtig geschrieben „${t.en}“.`) : "";
+  let note = info.note ? info.note : info.timeout ? "Die Zeit für diese Frage ist um. Das zählt wie eine falsche Antwort, der Begriff kommt später wieder." : info.near ? (info.spoken ? `Fast richtig: verstanden habe ich „${info.typed}“, gemeint ist „${q.want || t.en}“.` : `Fast richtig: „${info.typed}“, richtig geschrieben „${q.want || t.en}“.`) : "";
   if (ok && info.edited && q.inp === "say") note = (note ? note + " " : "") + "Von Hand geändert, darum zählt es als Schreiben.";
   const r = record(q, ok, info.inp);
   Q.answered = Object.assign(r, {pick:info.pick, typed:info.typed, spoken:!!info.spoken, near:info.near, timeout:!!info.timeout, ok, note, at:Date.now()});
@@ -2425,10 +2540,17 @@ function lexState(t){
   }).join("");
   return `<div class="lex-stages">${rows}</div>`;
 }
+/* Abkürzung und Beziehungen im Nachschlagen (nur, was es gibt) */
+function lexRel(t){
+  const a = extraOf(t).abbr, r = relOf(t), out = [];
+  if (a) out.push(`<b>Abkürzung:</b> ${esc(a[0])} = ${esc(a[1])}`);
+  for (const k of Object.keys(REL_KINDS)) if (r[k].length) out.push(`<b>${esc(REL_KINDS[k].tag)}:</b> ${r[k].map(id => esc(BYID[id].en)).join(", ")}`);
+  return out.length ? `<p class="lex-rel">${out.join("<br>")}</p>` : "";
+}
 const lexItem = t => `
   <details class="${learned(t) ? "st-done" : ""}"><summary><span class="s-en">${esc(t.en)}${stageTag(t)}</span><span class="s-de">${esc(t.de)}</span></summary>
   <div class="lex-body">${lexState(t)}
-  ${t.expls.length > 1 ? `<ol class="expls">${t.expls.map(e => `<li>${esc(e)}</li>`).join("")}</ol>` : `<p>${esc(t.expl)}</p>`}
+  ${t.expls.length > 1 ? `<ol class="expls">${t.expls.map(e => `<li>${esc(e)}</li>`).join("")}</ol>` : `<p>${esc(t.expl)}</p>`}${lexRel(t)}
   <div class="ex"><div class="en">${highlight(t)}</div><div class="tr">${esc(t.exDe)}</div>${speakBtn(t.exEn, langName(MOD.lang.term))} ${speakBtn(t.exDe, langName(MOD.lang.meaning), MOD.lang.meaning)}</div></div></details>`;
 function renderLex(){
   screen = "lex"; setFocus(true); navEnterScreen();
