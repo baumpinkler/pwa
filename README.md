@@ -6,7 +6,7 @@ Jeder wählt unter „Module verwalten“ (＋ in der Modulleiste) selbst, welch
 
 ## Ein neues Modul hinzufügen
 1. Neuen Ordner `modules/<key>/` anlegen, der Ordnername ist der `key` des Moduls, z. B. `modules/bio/`.
-2. Darin `module.json` ablegen (Aufbau wie `modules/agile/module.json`, vorne `"format":"fachvokabeln-modul","version":1`).
+2. Darin `module.json` ablegen (Aufbau wie `modules/agile/module.json`, vorne `"format":"fachvokabeln-modul","version":2`).
    Ein Modul ist genau diese eine Datei. Zusatzinhalte für schwere Fragearten stehen optional im Feld `extra` derselben Datei.
 3. In `modules/index.json` einen Eintrag ergänzen: `key`, `name`, `short`, `icon`, `desc` (ein Satz für den Katalog),
    `count` (Zahl der Begriffe, optional), `ls`, `doc`, `accent`, `board`.
