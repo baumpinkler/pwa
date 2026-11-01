@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Quiz-Einstellungen · Fach-Vokabeln</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<!--
+  Quiz-Einstellungen eines Moduls (Feld „quiz“ in modules/<key>/module.json) zusammenklicken.
+  Ändert nichts im Repo: module.json herunterladen oder die Einstellung für Claude kopieren.
+  Die Liste der Fragearten (KINDS unten) ist aus app.js nachgebaut: bei neuen Fragearten oder neuen
+  Einstellungen in kindConf/stageConf/quizConf hier mitziehen (siehe CLAUDE.md, „Dateien“).
+-->
+<style>
+  :root{--board:#0a0510;--surface:#170d24;--line:#3b2854;--ink:#f1ebf8;--soft:#c5b5d9;--accent:#6c3fb8;--ok:#74cf9f;--bad:#ff8d93;
+    --m1:#CDBBE8;--m3:#D49DC2;--gold:#e0b230;--n-sky:#95B1CF;--n-lime:#B5C68C;--n-coral:#CF968B;--warn:#ffcf6b;color-scheme:dark}
+  *{box-sizing:border-box}
+  html{background:var(--board)}
+  body{margin:0;color:var(--ink);font:16px/1.5 "Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:radial-gradient(900px 380px at 50% -120px,color-mix(in srgb,var(--accent) 38%,transparent),transparent 70%),var(--board);min-height:100vh}
+  main{max-width:1180px;margin:0 auto;padding:28px 18px 80px}
+  h1,h2,h3,.st-letter{font-family:"Bricolage Grotesque",system-ui,sans-serif}
+  h1{font-size:clamp(1.7rem,4vw,2.4rem);font-weight:800;line-height:1.1;margin:0 0 8px;letter-spacing:-.01em}
+  h2{font-size:1.25rem;font-weight:700;margin:40px 0 6px}
+  h3{font-size:1.05rem;margin:0 0 4px}
+  p{margin:6px 0;max-width:72ch}
+  .soft{color:var(--soft)}
+  small,.small{font-size:.86rem}
+  a{color:var(--m1)}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:16px}
+  label{display:block;font-size:.88rem;color:var(--soft)}
+  label>input,label>select,label>textarea{margin-top:4px}
+  input,select,textarea{font:inherit;color:var(--ink);background:color-mix(in srgb,var(--surface) 80%,black);border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%}
+  input[type=number]{max-width:9em}
+  textarea{min-height:4.6em;resize:vertical}
+  input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent);margin:0;flex:none}
+  .check{display:flex;gap:10px;align-items:flex-start;color:var(--ink);font-size:1rem;cursor:pointer}
+  .check span small{display:block;color:var(--soft)}
+  :focus-visible{outline:2px solid var(--m1);outline-offset:2px}
+  button{font:inherit;font-weight:700;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:9px 18px;cursor:pointer}
+  button.primary{background:var(--accent);border-color:transparent;color:#fff}
+  button.ghost{background:transparent}
+  button.danger{border-color:color-mix(in srgb,var(--bad) 60%,transparent);color:var(--bad);background:transparent}
+  button:disabled{opacity:.45;cursor:default}
+  .status{min-height:1.5em;margin:10px 0 0;font-weight:700}
+  .status.bad{color:var(--bad)} .status.ok{color:var(--ok)}
+  #modSel{min-width:16em;width:auto}
+
+  /* Matrix: Fragearten × Stufen */
+  .mx-wrap{overflow-x:auto;margin-top:14px;border:1px solid var(--line);border-radius:18px;background:color-mix(in srgb,var(--surface) 55%,transparent)}
+  table.mx{border-collapse:separate;border-spacing:0;width:100%;min-width:640px}
+  .mx th,.mx td{padding:6px;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent);vertical-align:middle}
+  .mx thead th{position:sticky;top:0;background:var(--surface);z-index:2;vertical-align:bottom;border-bottom:1px solid var(--line)}
+  .mx th.kind{position:sticky;left:0;z-index:1;background:color-mix(in srgb,var(--surface) 92%,var(--board));text-align:left;font-weight:400;width:42%;min-width:220px;padding:10px 14px}
+  .mx thead th.kind{z-index:3;font-family:"Bricolage Grotesque",sans-serif;font-weight:700;color:var(--soft)}
+  .mx th.kind b{font-weight:700}
+  .mx th.kind .id{color:var(--soft);font-size:.8rem;margin-left:6px}
+  .mx th.kind .d{display:block;color:var(--soft);font-size:.84rem;line-height:1.35;margin-top:2px}
+  .tag{display:inline-block;font-size:.74rem;line-height:1.5;padding:0 8px;border-radius:999px;border:1px solid var(--line);color:var(--soft);margin:4px 4px 0 0;white-space:nowrap}
+  .mx tr.grp th{text-align:left;padding:18px 14px 6px;font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:1rem;background:color-mix(in srgb,var(--surface) 92%,var(--board));position:sticky;left:0}
+  .mx tr.grp th span{font-family:"Atkinson Hyperlegible",sans-serif;font-weight:400;color:var(--soft);font-size:.84rem;margin-left:8px}
+  .st-head{width:100%;min-width:104px;background:none;border:1px solid transparent;border-radius:14px;padding:8px 6px;text-align:center;font-weight:400;color:var(--ink)}
+  .st-head:hover{border-color:var(--line);background:color-mix(in srgb,var(--st) 10%,transparent)}
+  .st-letter{display:block;font-size:2.2rem;font-weight:800;line-height:1;color:var(--st)}
+  .st-name{display:block;font-weight:700;font-size:.9rem;margin-top:4px;line-height:1.2}
+  .st-meta{display:block;color:var(--soft);font-size:.78rem;margin-top:2px;line-height:1.3}
+  .st-bar{display:block;height:3px;border-radius:2px;background:var(--st);margin:8px 8px 0;opacity:.8}
+  .add-st{white-space:nowrap;font-size:.9rem;padding:8px 14px}
+  td.cell{text-align:center;min-width:104px}
+  .cell-in{display:flex;gap:4px;align-items:stretch;justify-content:center}
+  .tog{flex:1;min-height:44px;border-radius:12px;padding:4px 6px;border:1px dashed color-mix(in srgb,var(--line) 90%,var(--soft));background:transparent;font-weight:400;font-size:.76rem;line-height:1.25;color:var(--soft)}
+  .tog:hover{border-color:var(--st)}
+  .tog[aria-pressed=true]{border:1px solid color-mix(in srgb,var(--st) 70%,transparent);background:color-mix(in srgb,var(--st) 24%,transparent);color:var(--ink)}
+  .tog[aria-pressed=true]::before{content:"";display:block;width:10px;height:10px;border-radius:50%;background:var(--st);margin:2px auto 3px;box-shadow:0 0 10px var(--st)}
+  .tog[aria-pressed=true].plain::before{margin:0 auto}
+  .gear{flex:none;width:34px;padding:0;border-radius:12px;font-size:1rem;background:transparent}
+  .gear.set{border-color:var(--st);color:var(--st)}
+  td.spacer{min-width:0;width:1%}
+  @media (max-width:640px){ .mx th.kind{min-width:170px;width:auto;padding:8px 10px} .mx th.kind .d{display:none} .mx th.kind .id{display:block;margin:0} }
+
+  /* Modul-Einstellungen */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px 26px;margin-top:14px;padding:18px;border:1px solid var(--line);border-radius:18px;background:color-mix(in srgb,var(--surface) 55%,transparent)}
+  .grid .wide{grid-column:1/-1}
+  .hintline{display:block;color:var(--soft);font-size:.82rem;margin-top:4px}
+
+  /* Prüfung */
+  ul.hints{list-style:none;padding:0;margin:12px 0 0;display:grid;gap:8px}
+  ul.hints li{padding:10px 14px 10px 40px;border-radius:12px;border:1px solid var(--line);position:relative;max-width:90ch}
+  ul.hints li::before{position:absolute;left:14px;top:10px;font-weight:700}
+  ul.hints li.bad{border-color:color-mix(in srgb,var(--bad) 55%,transparent)} ul.hints li.bad::before{content:"✕";color:var(--bad)}
+  ul.hints li.warn{border-color:color-mix(in srgb,var(--warn) 45%,transparent)} ul.hints li.warn::before{content:"!";color:var(--warn)}
+  ul.hints li.info::before{content:"i";color:var(--soft);font-style:italic}
+  ul.hints li.ok{border-color:color-mix(in srgb,var(--ok) 50%,transparent)} ul.hints li.ok::before{content:"✓";color:var(--ok)}
+
+  /* Ausgabe */
+  pre{background:color-mix(in srgb,var(--surface) 70%,black);border:1px solid var(--line);border-radius:14px;padding:14px;overflow-x:auto;font-size:.82rem;line-height:1.45;max-height:420px}
+  .dirty{color:var(--warn)}
+
+  /* Fenster */
+  dialog{border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--ink);padding:0;width:min(520px,calc(100vw - 24px));max-height:calc(100vh - 40px)}
+  dialog::backdrop{background:rgba(0,0,0,.6)}
+  .dlg{padding:20px 22px 22px;display:grid;gap:14px}
+  .dlg-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+  .dlg-head h3{font-size:1.3rem;font-weight:800}
+  .dlg .close{padding:6px 12px}
+  .dlg fieldset{border:1px solid var(--line);border-radius:12px;padding:10px 14px 12px;margin:0;display:flex;flex-wrap:wrap;gap:10px 18px}
+  .dlg legend{color:var(--soft);font-size:.88rem;padding:0 6px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .btns{display:flex;flex-wrap:wrap;gap:8px}
+  .note{color:var(--soft);font-size:.86rem}
+  .note.warn{color:var(--warn)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Quiz-Einstellungen</h1>
+    <p class="soft">Stufen und Fragearten eines Moduls zusammenklicken. Die Seite ändert nichts im Repo: Am Ende lädst du die <code>module.json</code> herunter oder kopierst die Einstellung für Claude.</p>
+    <div class="row">
+      <label>Modul<br><select id="modSel"></select></label>
+      <button id="pasteBtn" class="ghost">Einstellung einfügen</button>
+    </div>
+    <p id="loadStatus" class="status"></p>
+  </header>
+
+  <section>
+    <h2>Stufen und Fragearten</h2>
+    <p class="soft small">Tipp in eine Zelle, um eine Frageart in die Stufe zu nehmen oder herauszunehmen. ⚙ öffnet ihre Einstellungen in dieser Stufe, ein Tipp auf den Stufenkopf die Einstellungen der Stufe. Neue Begriffe starten in der ersten Stufe.</p>
+    <div class="mx-wrap"><table class="mx" id="mx"></table></div>
+  </section>
+
+  <section>
+    <h2>Für das ganze Modul</h2>
+    <div class="grid" id="modForm"></div>
+  </section>
+
+  <section>
+    <h2>Prüfung</h2>
+    <ul class="hints" id="hints"></ul>
+  </section>
+
+  <section>
+    <h2>Übernehmen</h2>
+    <p class="soft small" id="outNote"></p>
+    <div class="btns" style="margin-top:12px">
+      <button class="primary" id="dlBtn">module.json herunterladen</button>
+      <button id="claudeBtn">Für Claude kopieren</button>
+      <button id="jsonBtn" class="ghost">Nur JSON kopieren</button>
+      <button id="resetBtn" class="ghost">Änderungen verwerfen</button>
+    </div>
+    <p id="outStatus" class="status"></p>
+    <pre id="out"></pre>
+  </section>
+</main>
+
+<dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
+
+<script>
+"use strict";
+/* ---------- Fragearten, nachgebaut aus KINDS in app.js ----------
+   outs/ins wie in app.js, dirs = eigene Ausgabearten (Feld „directions“), opt = nutzt Antwortmöglichkeiten,
+   ai = KI-Frageart (rubric), langOpt = Feld „language“, need = Inhalt, den nicht jeder Begriff hat. */
+const KINDS = [
+  {id:"meaning-to-term", name:"Bedeutung → Begriff", g:"pick", outs:["read","hear"], ins:["pick","type","say"], opt:true,
+    d:"Du liest oder hörst die Bedeutung und antwortest mit dem Begriff."},
+  {id:"term-to-meaning", name:"Begriff → Bedeutung", g:"pick", outs:["read","hear"], ins:["pick"], opt:true,
+    d:"Du liest oder hörst den Begriff und wählst die Bedeutung."},
+  {id:"gap", name:"Lückensatz", g:"pick", outs:["read"], ins:["pick","type","say"], opt:true,
+    d:"In einem Beispielsatz fehlt der Begriff (bis zu 3 Sätze je Begriff)."},
+  {id:"situation", name:"Situation", g:"pick", outs:["read","hear"], ins:["pick","type","say"], opt:true,
+    d:"Eine Situation aus dem Arbeitsalltag: Welcher Begriff passt? (3 je Begriff)"},
+  {id:"explain-to-term", name:"Erklärung → Begriff", g:"pick", outs:["read","hear"], ins:["pick","type","say"], opt:true,
+    d:"Eine der 3 Erklärungen, du antwortest mit dem Begriff."},
+  {id:"term-to-explain", name:"Begriff → Erklärung", g:"pick", outs:["read","hear"], ins:["pick"], opt:true,
+    d:"Du siehst den Begriff und wählst die passende Erklärung."},
+  {id:"which-situation", name:"Welche Situation passt?", g:"pick", outs:["read"], ins:["pick"], opt:true, long:true,
+    d:"Du siehst den Begriff und wählst die passende Situation. Lange Antworten, darum meist 3."},
+  {id:"truefalse", name:"Stimmt das?", g:"pick", outs:["read"], ins:["pick"],
+    d:"Eine Aussage zum Begriff, stimmt sie? Danach die Begründung."},
+  {id:"multi-truefalse", name:"Mehrere Aussagen", g:"pick", outs:["read"], ins:["pick"],
+    d:"Vier Aussagen, alle richtigen antippen und prüfen."},
+  {id:"difference", name:"Unterschied", g:"pick", outs:["read"], ins:["pick"], opt:true, need:"conf", maxOpt:4,
+    d:"Zwei verwechselbare Begriffe als A und B: Welcher Satz beschreibt den Unterschied?"},
+  {id:"wrong-term", name:"Falscher Begriff im Satz", g:"pick", outs:["read"], ins:["pick"], opt:true,
+    d:"Passt der markierte Begriff? Wenn nicht, Folgefrage nach dem richtigen."},
+  {id:"translate-sentence", name:"Satz übersetzen", g:"pick", outs:["en-de","de-en"], dirs:"tr", ins:["pick"], opt:true,
+    d:"Welche Übersetzung des Beispielsatzes stimmt? Falsche Antworten auch mit demselben Begriff."},
+  {id:"abbreviation", name:"Abkürzung", g:"pick", outs:["short-long","long-short"], dirs:"ab", ins:["pick","type"], opt:true, need:"abbr",
+    d:"Wofür steht die Abkürzung, wie kürzt man ab? Falsche Antworten auch leicht abgewandelt."},
+  {id:"related", name:"Gegenteil und Verwandte", g:"pick", outs:["read"], ins:["pick"], opt:true, need:"rel",
+    d:"Gegenteil, fast dasselbe oder eng verwandt: den passenden Begriff wählen."},
+  {id:"build-sentence", name:"Satz bauen", g:"pick", outs:["read"], ins:["build"],
+    d:"Satz in der Bedeutungs-Sprache, du tippst die Wörter in der Begriffs-Sprache der Reihe nach an."},
+  {id:"letter-gaps", name:"Buchstabenlücken", g:"write", outs:["read"], ins:["type"],
+    d:"Rund 40 % der Buchstaben sind verdeckt, du schreibst den ganzen Begriff."},
+  {id:"dictation", name:"Diktat", g:"write", outs:["hear"], ins:["type"],
+    d:"Der Begriff wird vorgelesen, du schreibst ihn."},
+  {id:"pronounce", name:"Nachsprechen", g:"write", outs:["read"], ins:["say"],
+    d:"Du liest den Begriff und sprichst ihn nach. Abschreiben zählt nicht."},
+  {id:"explain-ai", name:"In eigenen Worten", g:"ai", outs:["read"], ins:["free"], ai:true,
+    d:"Du erklärst den Begriff selbst, die KI prüft."},
+  {id:"own-sentence", name:"Eigener Satz", g:"ai", outs:["read"], ins:["free"], ai:true, langOpt:true,
+    d:"Du schreibst einen Satz, der zeigt, was der Begriff bedeutet."},
+  {id:"difference-ai", name:"Unterschied erklären", g:"ai", outs:["read"], ins:["free"], ai:true, need:"conf",
+    d:"Du erklärst, was zwei verwechselbare Begriffe unterscheidet."},
+  {id:"simple-explain", name:"Einfach erklärt", g:"ai", outs:["read"], ins:["free"], ai:true,
+    d:"So erklären, dass es jemand ohne Vorwissen versteht, etwa ein Kind."},
+  {id:"use-case", name:"Anwendungsfall", g:"ai", outs:["read"], ins:["free"], ai:true,
+    d:"Wann passt der Begriff, wann nicht? Beides ist nötig."}
+];
+const KBY = Object.fromEntries(KINDS.map(k => [k.id, k]));
+const GROUPS = [["pick", "Zum Auswählen", "gehen auch für ganz neue Begriffe"],
+  ["write", "Schreiben, Hören, Sprechen", "erst nach einer richtigen Antwort zum Begriff"],
+  ["ai", "KI-Prüfung", "eigener Gemini-Schlüssel nötig, jede Frage ist eine Anfrage"]];
+const IN_L = {pick:"Auswählen", type:"Schreiben", say:"Sprechen", build:"Wörter antippen", free:"Schreiben oder diktieren"};
+/* Standardplan der App (DEFAULT_STAGES) als Start für ein neues Modul */
+const DEFAULT_QUIZ = {round:10, lockstep:true, options:5, flashcards:true, stages:[
+  {id:"bedeutung", name:"Begriff und Bedeutung", short:"A", kinds:[{kind:"meaning-to-term", minCorrect:3}, "term-to-meaning"], waitDays:0, minCorrect:5},
+  {id:"anwenden", name:"Anwenden", short:"B", kinds:["gap", "situation", "truefalse", "difference"], waitDays:1},
+  {id:"erklaeren", name:"In eigenen Worten", short:"C", kinds:["explain-ai"], waitDays:1, perRound:2}]};
+const STAGE_MAX = 6;
+const STAGE_COLORS = ["var(--m3)", "var(--gold)", "var(--m1)", "var(--n-sky)", "var(--n-lime)", "var(--n-coral)"];
+const LANG_NAMES = {en:"Englisch", de:"Deutsch", fr:"Französisch", es:"Spanisch", it:"Italienisch", la:"Latein", hr:"Kroatisch", tr:"Türkisch"};
+
+/* ---------- Zustand ---------- */
+let INDEX = [], MODULE = null, KEY = "", LANG = {term:"en-US", meaning:"de-AT"};
+let S = null, BASE = "", LOADED_IDS = [], AVAIL = null, IMPORT_NOTES = [];
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]));
+const arr = v => Array.isArray(v) ? v : [];
+const str = v => typeof v === "string" ? v : "";
+const num = v => (v === "" || v === null || v === undefined || typeof v === "boolean" || !Number.isFinite(Number(v))) ? "" : Math.round(Number(v));
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const fmt = n => n.toLocaleString("de-DE");
+const langName = code => LANG_NAMES[String(code || "").slice(0, 2)] || code;
+const T = () => langName(LANG.term), M = () => langName(LANG.meaning);
+const outLabel = (def, o) => def.dirs === "tr" ? (o === "en-de" ? T() + " → " + M() : M() + " → " + T())
+  : def.dirs === "ab" ? (o === "short-long" ? "Abkürzung → Langform" : "Langform → Abkürzung")
+  : o === "hear" ? "Hören" : "Lesen";
+const stColor = i => STAGE_COLORS[clamp(S.stages.length - 1 - i, 0, STAGE_COLORS.length - 1)];
+const only = (want, all) => { const v = arr(want).filter(x => all.includes(x)); return v.length ? all.filter(x => v.includes(x)) : all.slice(); };
+
+/* Effektive Werte (wie quizConf in app.js) */
+const effRound = () => S.mod.round === "" ? 10 : clamp(S.mod.round, 3, 20);
+const effOpt = () => S.mod.options === "" ? 5 : clamp(S.mod.options, 2, 6);
+const effStOpt = st => st.options === "" ? effOpt() : clamp(st.options, 2, 6);
+const effKOpt = (st, kc) => kc.options === "" ? effStOpt(st) : clamp(kc.options, 2, 6);
+const effWait = (st, i) => st.waitDays === "" ? (i ? 1 : 0) : clamp(st.waitDays, 0, 30);
+const cleanId = s => String(s || "").trim().slice(0, 24).toLowerCase().replace(/[^a-z0-9_-]/g, "");
+const stId = (st, i) => cleanId(st.id) || "stufe" + (i + 1);
+const stShort = (st, i) => st.short.trim().slice(0, 3) || "ABCDEF"[i];
+const stName = (st, i) => st.name.trim().slice(0, 40) || "Stufe " + (i + 1);
+const stLabel = (st, i) => "Stufe " + stShort(st, i) + " · " + stName(st, i);
+
+/* ---------- Einlesen und Schreiben ---------- */
+function newKc(def, o){
+  o = o || {};
+  return {outs:only(o[def.dirs ? "directions" : "outputs"], def.outs), ins:only(o.inputs, def.ins),
+    minCorrect:num(o.minCorrect), options:num(o.options), rubric:str(o.rubric), language:o.language === "term" ? "term" : "meaning"};
+}
+function fromQuiz(q){
+  IMPORT_NOTES = [];
+  q = q && typeof q === "object" && !Array.isArray(q) ? q : {};
+  const ty = q.typing && typeof q.typing === "object" ? q.typing : {};
+  const mod = {round:num(q.round), lockstep:q.lockstep !== false, options:num(q.options), flashcards:q.flashcards !== false,
+    help:str(q.help), typosPer:num(ty.typosPer), caseSensitive:ty.caseSensitive === true, rubric:str(q.ai && q.ai.rubric)};
+  if (!Array.isArray(q.stages)) IMPORT_NOTES.push("Keine Stufen in der Einstellung, darum steht hier der Standardplan der App.");
+  const list = Array.isArray(q.stages) ? q.stages : DEFAULT_QUIZ.stages;
+  if (list.length > STAGE_MAX) IMPORT_NOTES.push(`Mehr als ${STAGE_MAX} Stufen: Die App nimmt nur die ersten ${STAGE_MAX}, die übrigen sind hier weggelassen.`);
+  const stages = list.slice(0, STAGE_MAX).filter(s => s && typeof s === "object").map(s => {
+    const st = {id:str(s.id), name:str(s.name), short:str(s.short), waitDays:num(s.waitDays), perRound:num(s.perRound),
+      minCorrect:num(s.minCorrect), options:num(s.options), timeLimit:num(s.timeLimit), kinds:{}};
+    for (const k of arr(s.kinds)) {
+      const o = typeof k === "string" ? {kind:k} : k && typeof k === "object" ? k : {};
+      const def = KBY[o.kind];
+      if (!def) { IMPORT_NOTES.push(`Unbekannte Frageart „${o.kind}“ in ${st.name || st.id || "einer Stufe"}: kennt diese Seite nicht, fällt weg.`); continue; }
+      if (!st.kinds[def.id]) st.kinds[def.id] = newKc(def, o);
+    }
+    return st;
+  });
+  return {mod, stages};
+}
+function toQuiz(){
+  const m = S.mod, round = effRound(), opt = effOpt(), q = {round, lockstep:m.lockstep, options:opt, flashcards:m.flashcards};
+  if (m.help.trim()) q.help = m.help.trim().slice(0, 400);
+  const tp = m.typosPer === "" ? 6 : clamp(m.typosPer, 3, 20);
+  if (tp !== 6 || m.caseSensitive) { q.typing = {}; if (tp !== 6) q.typing.typosPer = tp; if (m.caseSensitive) q.typing.caseSensitive = true; }
+  if (m.rubric.trim()) q.ai = {rubric:m.rubric.trim().slice(0, 600)};
+  q.stages = [];
+  S.stages.forEach((st, i) => {
+    const kinds = [], sopt = effStOpt(st);
+    for (const id of Object.keys(st.kinds)) {   /* Reihenfolge wie eingelesen, neue hinten */
+      const def = KBY[id], kc = st.kinds[id];
+      const k = {kind:def.id};
+      if (kc.outs.length && kc.outs.length < def.outs.length) k[def.dirs ? "directions" : "outputs"] = def.outs.filter(x => kc.outs.includes(x));
+      if (kc.ins.length && kc.ins.length < def.ins.length) k.inputs = def.ins.filter(x => kc.ins.includes(x));
+      if (kc.minCorrect !== "" && clamp(kc.minCorrect, 0, 30) > 0) k.minCorrect = clamp(kc.minCorrect, 0, 30);
+      if (def.opt && kc.options !== "" && effKOpt(st, kc) !== sopt) k.options = effKOpt(st, kc);
+      if (def.langOpt && kc.language === "term") k.language = "term";
+      if (def.ai && kc.rubric.trim()) k.rubric = kc.rubric.trim().slice(0, 300);
+      kinds.push(Object.keys(k).length === 1 ? def.id : k);
+    }
+    if (!kinds.length) return;
+    const o = {id:stId(st, i), name:stName(st, i), short:stShort(st, i), kinds, waitDays:effWait(st, i)};
+    if (st.perRound !== "" && clamp(st.perRound, 1, round) < round) o.perRound = clamp(st.perRound, 1, round);
+    if (st.minCorrect !== "" && clamp(st.minCorrect, 0, 30) > 0) o.minCorrect = clamp(st.minCorrect, 0, 30);
+    if (st.options !== "" && sopt !== opt) o.options = sopt;
+    if (st.timeLimit !== "" && st.timeLimit > 0) o.timeLimit = clamp(st.timeLimit, 5, 120);
+    q.stages.push(o);
+  });
+  return q;
+}
+const quizText = () => JSON.stringify(toQuiz(), null, 1);
+const dirty = () => S && quizText() !== BASE;
+
+/* Zählt Begriffe mit Inhalten, die nicht jeder Begriff hat */
+function availability(mod){
+  const raw = arr(mod.raw), ex = mod.extra && typeof mod.extra === "object" ? mod.extra : {};
+  const id = en => String(en).toLowerCase().replace(/[^a-z0-9]/g, "-");
+  const relIds = new Set();
+  let conf = 0, abbr = 0;
+  for (const r of raw) {
+    const e = ex[id(r[1])]; if (!e) continue;
+    if (arr(e.conf).length) conf++;
+    if (Array.isArray(e.abbr) && e.abbr.length === 2) abbr++;
+    if (e.rel && typeof e.rel === "object") for (const k of ["opp", "syn", "rel"]) for (const p of arr(e.rel[k])) { relIds.add(id(r[1])); relIds.add(p); }
+  }
+  return {total:raw.length, conf, abbr, rel:raw.filter(r => relIds.has(id(r[1]))).length};
+}
+
+/* ---------- Laden ---------- */
+async function loadIndex(){
+  const sel = $("modSel");
+  try {
+    const r = await fetch("../modules/index.json", {cache:"no-cache"});
+    if (!r.ok) throw new Error(r.status);
+    INDEX = arr((await r.json()).modules);
+  } catch (e) {
+    INDEX = [];
+    status("Der Modul-Katalog lässt sich nicht laden. Die Seite muss über GitHub Pages oder einen lokalen Server laufen. „Neues Modul“ und „Einstellung einfügen“ gehen trotzdem.", "bad");
+  }
+  sel.innerHTML = INDEX.map(m => `<option value="${esc(m.key)}">${esc((m.icon ? m.icon + " " : "") + m.name)} (${esc(m.key)})</option>`).join("")
+    + `<option value="">＋ Neues Modul (Standardplan)</option>`;
+  const want = decodeURIComponent(location.hash.slice(1));
+  sel.value = INDEX.some(m => m.key === want) ? want : INDEX.length ? INDEX[0].key : "";
+  await choose(sel.value);
+}
+async function choose(key){
+  KEY = key; MODULE = null; AVAIL = null; LANG = {term:"en-US", meaning:"de-AT"};
+  if (!key) {
+    applyTheme(null);
+    setState(fromQuiz(DEFAULT_QUIZ), []);
+    IMPORT_NOTES = [];
+    status("Neues Modul: Der Standardplan der App ist eingetragen. Ändere ihn nach Wunsch und kopiere ihn für Claude.", "");
+    history.replaceState(null, "", location.pathname + location.search);
+    return render();
+  }
+  const meta = INDEX.find(m => m.key === key);
+  status(`Lade ${meta ? meta.name : key} …`, "");
+  try {
+    const r = await fetch(`../modules/${encodeURIComponent(key)}/module.json`, {cache:"no-cache"});
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    MODULE = await r.json();
+  } catch (e) {
+    MODULE = null; setState(fromQuiz(DEFAULT_QUIZ), []);
+    status(`Das Modul „${key}“ lässt sich nicht laden (${e.message}). Unten steht der Standardplan.`, "bad");
+    return render();
+  }
+  if (MODULE.lang) LANG = Object.assign(LANG, MODULE.lang);
+  applyTheme(MODULE.theme);
+  AVAIL = availability(MODULE);
+  const q = MODULE.quiz;
+  setState(fromQuiz(q), q && Array.isArray(q.stages) ? q.stages.map((s, i) => cleanId(s && s.id) || "stufe" + (i + 1)) : []);
+  if (!q || !Array.isArray(q.stages)) BASE = "";
+  history.replaceState(null, "", "#" + key);
+  status(`${MODULE.name || key}: ${fmt(AVAIL.total)} Begriffe, Einstellung aus modules/${key}/module.json geladen.`, "ok");
+  render();
+}
+function setState(state, loadedIds){ S = state; LOADED_IDS = loadedIds; BASE = quizText(); }
+function applyTheme(th){
+  const root = document.documentElement.style, keys = {board:"--board", surface:"--surface", line:"--line", ink:"--ink", "ink-soft":"--soft", accent:"--accent", ok:"--ok", bad:"--bad", m1:"--m1", m3:"--m3"};
+  for (const [k, v] of Object.entries(keys)) { if (th && th[k]) root.setProperty(v, th[k]); else root.removeProperty(v); }
+}
+function status(text, cls){ const el = $("loadStatus"); el.textContent = text; el.className = "status " + (cls || ""); }
+
+/* ---------- Darstellung ---------- */
+function render(){ renderMatrix(); renderModForm(); renderHints(); renderOut(); }
+function refresh(){ renderMatrix(); renderHints(); renderOut(); }
+
+function kcSummary(def, st, kc){
+  const p = [];
+  if (kc.outs.length < def.outs.length) p.push(kc.outs.map(o => outLabel(def, o)).join(", "));
+  if (kc.ins.length < def.ins.length) p.push(kc.ins.map(i => IN_L[i]).join(", "));
+  if (def.opt && kc.options !== "" && effKOpt(st, kc) !== effStOpt(st)) p.push(effKOpt(st, kc) + " Antw.");
+  if (kc.minCorrect !== "" && kc.minCorrect > 0) p.push("mind. " + kc.minCorrect);
+  if (def.langOpt && kc.language === "term") p.push("ganz " + T());
+  if (def.ai && kc.rubric.trim()) p.push("Hinweis");
+  return p;
+}
+function stageMeta(st, i){
+  const p = [i === 0 ? "neue Begriffe" : (effWait(st, i) ? `${effWait(st, i)} Tag${effWait(st, i) > 1 ? "e" : ""} danach` : "gleich danach")];
+  if (st.perRound !== "" && clamp(st.perRound, 1, effRound()) < effRound()) p.push(`max. ${st.perRound} pro Runde`);
+  if (st.minCorrect !== "" && st.minCorrect > 0) p.push(`mind. ${st.minCorrect} richtig`);
+  if (st.options !== "" && effStOpt(st) !== effOpt()) p.push(`${effStOpt(st)} Antw.`);
+  if (st.timeLimit !== "" && st.timeLimit > 0) p.push(`${clamp(st.timeLimit, 5, 120)} s`);
+  return p.join(" · ");
+}
+function needTag(def){
+  if (!def.need || !AVAIL) return "";
+  const n = AVAIL[def.need];
+  return `<span class="tag" title="Begriffe mit passenden Inhalten">${fmt(n)} von ${fmt(AVAIL.total)} Begriffen</span>`;
+}
+function renderMatrix(){
+  const st = S.stages, cols = st.length + (st.length < STAGE_MAX ? 1 : 0);
+  let h = `<thead><tr><th class="kind" scope="col">Frageart</th>`;
+  const w = st.length ? Math.floor(56 / st.length) : 0;   /* alle Stufen gleich breit */
+  st.forEach((s, i) => {
+    h += `<th scope="col" style="--st:${stColor(i)};width:${w}%"><button class="st-head" data-stage="${i}" aria-label="Einstellungen ${esc(stLabel(s, i))}">
+      <span class="st-letter">${esc(stShort(s, i))}</span><span class="st-name">${esc(stName(s, i))}</span>
+      <span class="st-meta">${esc(stageMeta(s, i))}</span><span class="st-bar"></span></button></th>`;
+  });
+  if (st.length < STAGE_MAX) h += `<th scope="col" class="spacer"><button class="add-st" id="addSt">＋ Stufe</button></th>`;
+  h += `</tr></thead><tbody>`;
+  for (const [g, gName, gNote] of GROUPS) {
+    h += `<tr class="grp"><th colspan="${cols + 1}">${esc(gName)}<span>${esc(gNote)}</span></th></tr>`;
+    for (const def of KINDS.filter(k => k.g === g)) {
+      const tags = [];
+      if (def.outs.includes("hear") && !def.dirs) tags.push(`<span class="tag">🔊 Hören</span>`);
+      if (def.ins.includes("say")) tags.push(`<span class="tag">🎤 Sprechen</span>`);
+      h += `<tr><th class="kind" scope="row"><b>${esc(def.name)}</b><span class="id">${esc(def.id)}</span><span class="d">${esc(def.d)}</span>${tags.join("")}${needTag(def)}</th>`;
+      st.forEach((s, i) => {
+        const kc = s.kinds[def.id], on = !!kc, sum = on ? kcSummary(def, s, kc) : [];
+        h += `<td class="cell" style="--st:${stColor(i)}"><div class="cell-in">
+          <button class="tog${on && !sum.length ? " plain" : ""}" aria-pressed="${on}" data-tog="${i}|${def.id}" aria-label="${esc(def.name)} in ${esc(stLabel(s, i))}">${on ? esc(sum.join(" · ")) : ""}</button>
+          ${on ? `<button class="gear${sum.length ? " set" : ""}" data-kc="${i}|${def.id}" aria-label="Einstellungen ${esc(def.name)} in ${esc(stLabel(s, i))}" title="Einstellungen in dieser Stufe">⚙</button>` : ""}
+        </div></td>`;
+      });
+      if (st.length < STAGE_MAX) h += `<td class="spacer"></td>`;
+      h += `</tr>`;
+    }
+  }
+  $("mx").innerHTML = h + `</tbody>`;
+}
+$("mx").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.id === "addSt") return addStage();
+  if (b.dataset.stage) return openStage(+b.dataset.stage);
+  if (b.dataset.tog) {
+    const [i, k] = b.dataset.tog.split("|"), st = S.stages[+i];
+    if (st.kinds[k]) delete st.kinds[k]; else st.kinds[k] = newKc(KBY[k]);
+    refresh();
+    const again = document.querySelector(`[data-tog="${i}|${k}"]`); if (again) again.focus();
+    return;
+  }
+  if (b.dataset.kc) { const [i, k] = b.dataset.kc.split("|"); openKind(+i, k); }
+});
+function addStage(){
+  if (S.stages.length >= STAGE_MAX) return;
+  const i = S.stages.length;
+  S.stages.push({id:"", name:"", short:"ABCDEF"[i], waitDays:"", perRound:"", minCorrect:"", options:"", timeLimit:"", kinds:{}});
+  refresh(); openStage(i);
+}
+
+/* Modul-Einstellungen */
+function renderModForm(){
+  const m = S.mod;
+  $("modForm").innerHTML = `
+    <label>Fragen pro Runde<input type="number" min="3" max="20" data-m="round" value="${esc(m.round)}" placeholder="10"><span class="hintline">3 bis 20, Standard 10.</span></label>
+    <label>Antwortmöglichkeiten<input type="number" min="2" max="6" data-m="options" value="${esc(m.options)}" placeholder="5"><span class="hintline">2 bis 6, gilt für alle Stufen, die nichts anderes sagen.</span></label>
+    <label>Tippfehler erlaubt<input type="number" min="3" max="20" data-m="typosPer" value="${esc(m.typosPer)}" placeholder="6"><span class="hintline">1 Tippfehler je angefangene so viele Buchstaben (3 bis 20, Standard 6). Weniger = großzügiger.</span></label>
+    <label class="check"><input type="checkbox" data-m="lockstep" ${m.lockstep ? "checked" : ""}><span>Gleichschritt<small>Gefragt wird nur die niedrigste Stufe aller angehakten Themen. Aus: Jedes Thema geht für sich weiter, die Runde mischt.</small></span></label>
+    <label class="check"><input type="checkbox" data-m="flashcards" ${m.flashcards ? "checked" : ""}><span>Karteikarten anbieten<small>Aus: Die Kachel und die Hinweise dazu fallen weg.</small></span></label>
+    <label class="check"><input type="checkbox" data-m="caseSensitive" ${m.caseSensitive ? "checked" : ""}><span>Groß- und Kleinschreibung beachten<small>Nur beim Schreiben. Standard: egal.</small></span></label>
+    <label class="wide">Satz für die Hilfe<textarea maxlength="400" data-m="help" placeholder="Optional, z. B. warum eine Stufe fehlt">${esc(m.help)}</textarea><span class="hintline">Steht in „So lernst du hier“ unter der Einleitung, bis 400 Zeichen.</span></label>
+    <label class="wide">Bewertungshinweis für alle KI-Fragen<textarea maxlength="600" data-m="rubric" placeholder="Optional, z. B. „Die Lernenden sind zehn Jahre alt, bewerte entsprechend.“">${esc(m.rubric)}</textarea><span class="hintline">Darf nur Zielgruppe, Sprachniveau oder Schwerpunkte anpassen, bis 600 Zeichen. Ein festes Urteil verlangen geht nicht.</span></label>`;
+}
+$("modForm").addEventListener("input", e => {
+  const k = e.target.dataset.m; if (!k) return;
+  S.mod[k] = e.target.type === "checkbox" ? e.target.checked : e.target.type === "number" ? num(e.target.value) : e.target.value;
+  refresh();
+});
+
+/* ---------- Fenster ---------- */
+const dlg = $("dlg");
+function openDlg(html, wire){
+  $("dlgBody").innerHTML = html;
+  wire($("dlgBody"));
+  if (!dlg.open) dlg.showModal();
+}
+dlg.addEventListener("click", e => { if (e.target === dlg || e.target.closest(".close")) dlg.close(); });
+
+function openStage(i){
+  const st = S.stages[i], loaded = LOADED_IDS.includes(stId(st, i)) || (st.id && LOADED_IDS.includes(cleanId(st.id)));
+  openDlg(`
+    <div class="dlg-head"><h3 style="color:${stColor(i)}">${esc(stLabel(st, i))}</h3><button class="close ghost">Fertig</button></div>
+    <div class="two">
+      <label>Name<input maxlength="40" data-s="name" value="${esc(st.name)}" placeholder="Stufe ${i + 1}"></label>
+      <label>Buchstabe<input maxlength="3" data-s="short" value="${esc(st.short)}" placeholder="${"ABCDEF"[i]}"></label>
+    </div>
+    <label>ID<input maxlength="24" data-s="id" value="${esc(st.id)}" placeholder="stufe${i + 1}"><span class="hintline">Kleinbuchstaben, Ziffern, - und _.</span></label>
+    ${loaded ? `<p class="note warn">An dieser ID hängt der Lernstand. Ändere sie nur, wenn noch niemand mit dem Modul lernt.</p>` : ""}
+    <div class="two">
+      <label>Abstand in Tagen<input type="number" min="0" max="30" data-s="waitDays" value="${esc(st.waitDays)}" placeholder="${i ? 1 : 0}" ${i ? "" : "disabled"}><span class="hintline">${i ? "Nach dem Abschluss der vorigen Stufe, 0 bis 30." : "Die erste Stufe wartet nie."}</span></label>
+      <label>Höchstens pro Runde<input type="number" min="1" max="${effRound()}" data-s="perRound" value="${esc(st.perRound)}" placeholder="alle (${effRound()})"><span class="hintline">Fragen dieser Stufe in einer Runde.</span></label>
+      <label>Mindestens richtig<input type="number" min="0" max="30" data-s="minCorrect" value="${esc(st.minCorrect)}" placeholder="0"><span class="hintline">Zusätzlich zu allen Häkchen, 0 bis 30.</span></label>
+      <label>Antwortmöglichkeiten<input type="number" min="2" max="6" data-s="options" value="${esc(st.options)}" placeholder="${effOpt()} (wie Modul)"></label>
+      <label>Zeitlimit in Sekunden<input type="number" min="0" max="120" data-s="timeLimit" value="${esc(st.timeLimit)}" placeholder="aus"><span class="hintline">5 bis 120, 0 = aus. Gilt nicht für KI-Fragen.</span></label>
+    </div>
+    <div class="btns">
+      <button data-act="left" ${i === 0 ? "disabled" : ""}>← Nach vorne</button>
+      <button data-act="right" ${i === S.stages.length - 1 ? "disabled" : ""}>Nach hinten →</button>
+      <button data-act="del" class="danger">Stufe löschen</button>
+    </div>`, body => {
+    body.addEventListener("input", e => {
+      const k = e.target.dataset.s; if (!k) return;
+      st[k] = e.target.type === "number" ? num(e.target.value) : e.target.value;
+      body.querySelector("h3").textContent = stLabel(st, i);
+      refresh();
+    });
+    body.querySelector("[data-act=left]").onclick = () => move(i, -1);
+    body.querySelector("[data-act=right]").onclick = () => move(i, 1);
+    const del = body.querySelector("[data-act=del]");
+    del.onclick = () => {
+      if (!del.dataset.sure) { del.dataset.sure = "1"; del.textContent = "Wirklich löschen?"; return; }
+      S.stages.splice(i, 1); dlg.close(); refresh();
+    };
+  });
+}
+function move(i, d){
+  const j = i + d; if (j < 0 || j >= S.stages.length) return;
+  [S.stages[i], S.stages[j]] = [S.stages[j], S.stages[i]];
+  refresh(); openStage(j);
+}
+
+function openKind(i, k){
+  const st = S.stages[i], def = KBY[k], kc = st.kinds[k];
+  const box = (name, vals, cur, lab) => vals.length < 2 ? "" : `<fieldset><legend>${name}</legend>${vals.map(v =>
+    `<label class="check"><input type="checkbox" data-${lab}="${v}" ${cur.includes(v) ? "checked" : ""}><span>${esc(lab === "o" ? outLabel(def, v) : IN_L[v])}</span></label>`).join("")}</fieldset>`;
+  const notes = [];
+  if (def.ins.some(x => x === "type" || x === "say") && def.ins.includes("pick")) notes.push("Schreiben und Sprechen kommen erst nach einer richtigen Antwort zum Begriff.");
+  if (def.outs.includes("hear") && !def.dirs) notes.push("Hören und Sprechen warten bei „Gerade kein Ton“ und werden später nachgeholt.");
+  if (def.maxOpt) notes.push(`Mehr als ${def.maxOpt} Antworten gibt es hier nie (höchstens 3 falsche Sätze).`);
+  openDlg(`
+    <div class="dlg-head"><div><h3>${esc(def.name)}</h3><span class="note">in ${esc(stLabel(st, i))}</span></div><button class="close ghost">Fertig</button></div>
+    <p class="note">${esc(def.d)}</p>
+    ${box(def.dirs ? "Richtungen" : "Ausgabe", def.outs, kc.outs, "o")}
+    ${box("Eingabe", def.ins, kc.ins, "i")}
+    <div class="two">
+      <label>Mindestens richtig<input type="number" min="0" max="30" data-k="minCorrect" value="${esc(kc.minCorrect)}" placeholder="0"><span class="hintline">Richtige Antworten mit dieser Frageart, zählt nur, wenn der Begriff Inhalte dafür hat.</span></label>
+      ${def.opt ? `<label>Antwortmöglichkeiten<input type="number" min="2" max="${def.maxOpt || 6}" data-k="options" value="${esc(kc.options)}" placeholder="${effStOpt(st)} (wie Stufe)"></label>` : ""}
+    </div>
+    ${def.langOpt ? `<fieldset><legend>Sprache des Satzes</legend>
+      <label class="check"><input type="radio" name="lng" data-lang="meaning" ${kc.language !== "term" ? "checked" : ""}><span>${esc(M())}, der Begriff bleibt ${esc(T())}</span></label>
+      <label class="check"><input type="radio" name="lng" data-lang="term" ${kc.language === "term" ? "checked" : ""}><span>Ganz ${esc(T())}</span></label></fieldset>` : ""}
+    ${def.ai ? `<label>Bewertungshinweis nur hier<textarea maxlength="300" data-k="rubric" placeholder="Optional, kommt zum Hinweis des Moduls dazu">${esc(kc.rubric)}</textarea><span class="hintline">Bis 300 Zeichen.</span></label>` : ""}
+    ${notes.map(n => `<p class="note">${esc(n)}</p>`).join("")}`, body => {
+    body.addEventListener("input", e => { const f = e.target.dataset.k; if (!f) return; kc[f] = e.target.type === "number" ? num(e.target.value) : e.target.value; refresh(); });
+    body.addEventListener("change", e => {
+      const t = e.target;
+      if (t.dataset.o || t.dataset.i) {
+        const field = t.dataset.o ? "outs" : "ins", all = t.dataset.o ? def.outs : def.ins, v = t.dataset.o || t.dataset.i;
+        let cur = kc[field].filter(x => x !== v); if (t.checked) cur.push(v);
+        if (!cur.length) { t.checked = true; return; }   /* mindestens eine Art bleibt */
+        kc[field] = all.filter(x => cur.includes(x)); refresh();
+      }
+      if (t.dataset.lang) { kc.language = t.dataset.lang; refresh(); }
+    });
+  });
+}
+
+/* ---------- Prüfung ---------- */
+function renderHints(){
+  const H = [], add = (c, t) => H.push([c, t]), st = S.stages, round = effRound();
+  IMPORT_NOTES.forEach(n => add("info", n));
+  if (!st.some(s => Object.keys(s.kinds).length)) add("bad", "Keine Stufe hat eine Frageart. Ohne gültige Stufe nimmt die App ihren Standardplan.");
+  st.forEach((s, i) => { if (!Object.keys(s.kinds).length) add("bad", `${stLabel(s, i)} hat keine Frageart und wird nicht gespeichert.`); });
+  const firstIdx = st.findIndex(s => Object.keys(s.kinds).length);
+  if (firstIdx >= 0) {
+    const f = st[firstIdx];
+    if (!Object.entries(f.kinds).some(([, kc]) => kc.ins.includes("pick") || kc.ins.includes("build")))
+      add("bad", `${stLabel(f, firstIdx)}: Neue Begriffe starten hier, aber keine Frageart lässt sich mit Auswählen oder Wörter-Antippen beantworten. Schreiben, Sprechen und KI kommen erst nach einer richtigen Antwort, die Begriffe kämen also nie dran.`);
+  }
+  const ids = st.map((s, i) => stId(s, i));
+  ids.forEach((id, i) => {
+    if (st[i].id.trim() && cleanId(st[i].id) !== st[i].id.trim()) add("info", `${stLabel(st[i], i)}: Die ID wird zu „${id}“ (nur Kleinbuchstaben, Ziffern, - und _).`);
+    if (ids.indexOf(id) !== i) add("bad", `Die ID „${id}“ kommt mehrfach vor. Jede Stufe braucht eine eigene.`);
+  });
+  if (LOADED_IDS.length) {
+    LOADED_IDS.filter(id => !ids.includes(id)).forEach(id => add("warn", `Die Stufe mit der ID „${id}“ gibt es nicht mehr. Ihr Lernstand bleibt gespeichert, wird aber nicht mehr verwendet; Begriffe, die dort standen, rücken in die nächste Stufe.`));
+    st.forEach((s, i) => { if (!LOADED_IDS.includes(ids[i]) && Object.keys(s.kinds).length) add("warn", `${stLabel(s, i)} ist neu (ID „${ids[i]}“). Alle Begriffe, die schon weiter sind, müssen sie nachholen; gelernte Begriffe werden wieder geöffnet, Krönchen bleiben.`); });
+  }
+  const sound = [], ai = [];
+  st.forEach((s, i) => {
+    const snd = Object.entries(s.kinds).filter(([k, kc]) => (kc.outs.includes("hear") && !KBY[k].dirs) || kc.ins.includes("say")).map(([k]) => KBY[k].name);
+    if (snd.length) sound.push(`${stShort(s, i)}: ${snd.join(", ")}`);
+    const aiK = Object.keys(s.kinds).filter(k => KBY[k].ai);
+    if (aiK.length) {
+      ai.push(aiK.length);
+      const pr = s.perRound === "" ? round : clamp(s.perRound, 1, round);
+      if (pr > 3) add("warn", `${stLabel(s, i)} hat KI-Fragen, aber bis zu ${pr} Fragen pro Runde. Jede ist eine Gemini-Anfrage; im Gratis-Limit sind 2 pro Runde bewährt.`);
+      if (s.timeLimit !== "" && s.timeLimit > 0) add("info", `${stLabel(s, i)}: Das Zeitlimit gilt nicht für die KI-Fragen dieser Stufe.`);
+    }
+    if (i === 0 && s.waitDays !== "" && s.waitDays > 0) add("info", `${stLabel(s, i)}: Die erste Stufe wartet nie, der Abstand wird ignoriert.`);
+    if (s.perRound !== "" && s.perRound > round) add("info", `${stLabel(s, i)}: Höchstens ${s.perRound} pro Runde ist mehr als die Runde lang ist (${round}), gilt also nicht.`);
+    const d = s.kinds.difference;
+    if (d && (d.options !== "" || s.options !== "") && effKOpt(s, d) > 4) add("info", `${stLabel(s, i)}: Beim Unterschied gibt es höchstens 4 Antworten, auch wenn ${effKOpt(s, d)} eingestellt sind.`);
+  });
+  if (sound.length) add("info", `Mit Hören oder Sprechen (${sound.join("; ")}): Bei „Gerade kein Ton“ warten diese Häkchen und die Begriffe bleiben in ihrer Stufe, bis du den Ton wieder einschaltest. Wer das nicht will, schränkt die Frageart auf Lesen und Auswählen/Schreiben ein.`);
+  const aiTotal = ai.reduce((a, b) => a + b, 0);
+  if (aiTotal > 2) add("info", `${aiTotal} KI-Fragearten im Plan: Jeder Begriff braucht dafür mindestens ${aiTotal} Gemini-Anfragen. Das Gratis-Limit ist schnell erreicht.`);
+  if (AVAIL) for (const def of KINDS) if (def.need && st.some(s => s.kinds[def.id]) && AVAIL[def.need] < AVAIL.total)
+    add("info", `${def.name} gibt es nur für ${fmt(AVAIL[def.need])} von ${fmt(AVAIL.total)} Begriffen; die übrigen bekommen die Frage einfach nicht.`);
+  if (!H.some(h => h[0] === "bad" || h[0] === "warn")) add("ok", "Keine Probleme gefunden.");
+  const order = {bad:0, warn:1, info:2, ok:3};
+  H.sort((a, b) => order[a[0]] - order[b[0]]);
+  $("hints").innerHTML = H.map(([c, t]) => `<li class="${c}">${esc(t)}</li>`).join("");
+}
+
+/* ---------- Ausgabe ---------- */
+function renderOut(){
+  $("out").textContent = quizText();
+  const d = dirty();
+  $("outNote").innerHTML = (KEY && MODULE
+    ? `Die heruntergeladene Datei kommt nach <code>modules/${esc(KEY)}/</code> ins Repo. Eine <code>VERSION</code>-Erhöhung ist nicht nötig.`
+    : `Für ein neues Modul: Kopiere die Einstellung für Claude, wenn du das Modul anlegen lässt.`)
+    + (d ? ` <span class="dirty">Geändert gegenüber der Moduldatei.</span>` : KEY && MODULE ? " Unverändert." : "");
+  $("dlBtn").disabled = !MODULE;
+  $("resetBtn").disabled = !d;
+}
+function moduleJson(){
+  const q = toQuiz(), out = {};
+  let placed = false;
+  for (const [k, v] of Object.entries(MODULE)) {
+    if (k === "quiz") { out.quiz = q; placed = true; continue; }
+    if (k === "theme" && !placed) { out.quiz = q; placed = true; }
+    out[k] = v;
+  }
+  if (!placed) out.quiz = q;
+  if (!(Number(out.version) >= 2)) out.version = 2;
+  return JSON.stringify(out);
+}
+function outStatus(t, cls){ const el = $("outStatus"); el.textContent = t; el.className = "status " + (cls || ""); clearTimeout(outStatus.t); outStatus.t = setTimeout(() => el.textContent = "", 4000); }
+async function copy(text, what){
+  try { await navigator.clipboard.writeText(text); outStatus(what + " kopiert.", "ok"); }
+  catch (e) {
+    const ta = document.createElement("textarea"); ta.value = text; document.body.append(ta); ta.select();
+    const ok = document.execCommand("copy"); ta.remove();
+    outStatus(ok ? what + " kopiert." : "Kopieren ging nicht. Markiere den Text unten von Hand.", ok ? "ok" : "bad");
+  }
+}
+$("dlBtn").onclick = () => {
+  if (!MODULE) return;
+  const blob = new Blob([moduleJson()], {type:"application/json"}), a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "module.json"; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  outStatus(`module.json für „${KEY}“ heruntergeladen.`, "ok");
+};
+$("jsonBtn").onclick = () => copy(quizText(), "JSON");
+$("claudeBtn").onclick = () => {
+  const j = "```json\n" + quizText() + "\n```";
+  const t = KEY && MODULE
+    ? `Bitte setze in modules/${KEY}/module.json das Feld \`quiz\` per Skript auf diesen Stand (zusammengeklickt mit tools/quiz-einstellungen.html):\n\n${j}`
+    : `Für das neue Modul soll das Feld \`quiz\` in der module.json so aussehen (zusammengeklickt mit tools/quiz-einstellungen.html):\n\n${j}`;
+  copy(t, "Text für Claude");
+};
+$("resetBtn").onclick = () => {
+  if (!dirty()) return;
+  if (!confirm("Alle Änderungen verwerfen und die Einstellung neu laden?")) return;
+  choose(KEY);
+};
+$("modSel").addEventListener("change", e => {
+  if (dirty() && !confirm("Deine Änderungen gehen verloren. Trotzdem das Modul wechseln?")) { e.target.value = KEY; return; }
+  choose(e.target.value);
+});
+$("pasteBtn").onclick = () => openDlg(`
+  <div class="dlg-head"><h3>Einstellung einfügen</h3><button class="close ghost">Abbrechen</button></div>
+  <p class="note">Das Feld <code>quiz</code> als JSON, mit oder ohne <code>"quiz":</code> davor. Ersetzt die aktuelle Einstellung; das gewählte Modul bleibt.</p>
+  <textarea id="pasteTa" style="min-height:12em;font-family:ui-monospace,Consolas,monospace;font-size:.85rem" placeholder='{"round":10,"stages":[…]}'></textarea>
+  <p class="status bad" id="pasteErr"></p>
+  <div class="btns"><button class="primary" id="pasteOk">Übernehmen</button></div>`, body => {
+  body.querySelector("#pasteOk").onclick = () => {
+    let txt = body.querySelector("#pasteTa").value.trim().replace(/^"quiz"\s*:\s*/, "").replace(/,\s*$/, "");
+    try {
+      let o = JSON.parse(txt);
+      if (o && o.quiz && typeof o.quiz === "object") o = o.quiz;
+      if (!o || typeof o !== "object" || Array.isArray(o)) throw new Error("Kein JSON-Objekt.");
+      S = fromQuiz(o); dlg.close(); render();
+      outStatus("Einstellung übernommen.", "ok");
+    } catch (e) { body.querySelector("#pasteErr").textContent = "Das ist kein gültiges JSON: " + e.message; }
+  };
+});
+window.addEventListener("beforeunload", e => { if (dirty()) { e.preventDefault(); e.returnValue = ""; } });
+
+loadIndex();
+</script>
+</body>
+</html>
